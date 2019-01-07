@@ -1,6 +1,9 @@
 """
 Hierarchy model of the class
 """
+
+GLOBAL_TAB_COUNT = 0
+
 class Node:
 
 	def __init__(self, name, parent = None):
@@ -71,7 +74,7 @@ class Node:
 				frame_numbers = [l[i][0], []]
 				for k in range(len(info_frame)):
 					frame_numbers[1].append(info_frame[k].pop(0))
-				position.append(frame_numbers)
+				rotation.append(frame_numbers)
 
 		return offset, position, rotation
 
@@ -100,25 +103,25 @@ class Node:
 			in the end
 		"""
 		l = Node.readline(f)
-		if l[0] == "JOINT":
-			Child = Node(l[1], parent)
-			offset, position, rotation = Node.readInfo(f, info_frame)
-			Child.translate = offset; Child.position = position; Child.rotate = rotation
-			parent.fils.append(Child)
-			Node.CreateChild(Child, f, info_frame)
-		elif l[0] == "End":
-			Child = Node(l[1], parent)
-			offset = Node.readInfo(f, info_frame, True)
-			Child.translate = offset
-			parent.fils.append(Child)
-			Node.CreateChild(parent, f, info_frame)
-		elif l[0] == "}":
-			Node.CreateChild(parent, f, info_frame)
-		elif l[0] == "MOTION":
-			return
-		else:
-			print("Invalid input")
-			raise
+		while l[0] != "MOTION":
+			if l[0] == "JOINT":
+				Child = Node(l[1], parent)
+				offset, position, rotation = Node.readInfo(f, info_frame)
+				Child.translate = offset; Child.position = position; Child.rotate = rotation
+				parent.fils.append(Child)
+				parent = Child
+			elif l[0] == "End":
+				Child = Node(l[1], parent)
+				offset = Node.readInfo(f, info_frame, True)
+				Child.translate = offset
+				parent.fils.append(Child)
+				parent = Child
+			elif l[0] == "}":
+				parent = parent.parent
+			else:
+				print("Invalid input")
+				raise
+			l = Node.readline(f)
 
 	@staticmethod
 	def readline(f):
@@ -211,6 +214,7 @@ class Node:
 			return Root
 
 	def __str__(self):
+		global GLOBAL_TAB_COUNT
 		"""
 		Stringify method of the object
 		Should return the same output as the bvh file (the part before motion)
@@ -219,19 +223,27 @@ class Node:
 		for the root node (without tabs)
 		"""
 		string = ""
-		string += "JOINT " + self.name + "\n"
-		string += "{\n"
-		string += "OFFSET " + " ".join([str(i) for i in self.translate]) + "\n"
+		string += "   " * GLOBAL_TAB_COUNT + "JOINT " + self.name + "\n"
+		string += "   " * GLOBAL_TAB_COUNT + "{\n"
+
+		GLOBAL_TAB_COUNT += 1
+
+		string += "   " * GLOBAL_TAB_COUNT + "OFFSET " + " ".join([str(i) for i in self.translate]) + "\n"
 		if len(self.position) + len(self.rotate) != 0:
-			string += "CHANNELS " + str(len(self.position) + len(self.rotate)) + " "
+			string += "   " * GLOBAL_TAB_COUNT + "CHANNELS " + str(len(self.position) + len(self.rotate)) + " "
 			if len(self.position) != 0:
 				string += " ".join([(str(i[0]) + "position") for i in self.position]) + " "
 			if len(self.rotate) != 0:
-				string += " ".join([(str(i[0]) + "rotation") for i in self.rotate]) + "\n"
+				string += " ".join([(str(i[0]) + "rotation") for i in self.rotate])
+			string += "\n"
 
 		for i in self.fils:
 			child_str = i.__str__()
 			if child_str is not None:
 				string += child_str
+
+		GLOBAL_TAB_COUNT -= 1
+
+		string += "   " * GLOBAL_TAB_COUNT + "}\n"
 
 		return string
