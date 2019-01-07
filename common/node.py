@@ -11,9 +11,10 @@ class Node:
 		self.translate = []
 		self.rotate = []
 		self.position = []
+		self.frame_time = 0
 
 	@staticmethod
-	def readInfo(f, end=False):
+	def readInfo(f, info_frame, end=False):
 		"""
 		f lit les 3 prochaines lignes
 		ET doit aussi ignore la ligne du {
@@ -45,10 +46,16 @@ class Node:
 		rotation = []
 		position = []
 		for i in range(2, 2 + number_channels):
-			if "rotation" in l[i]:
-				rotation.append(l[i][0])
 			if "position" in l[i]:
-				position.append(l[i][0])
+				frame_numbers = [l[i][0], []]
+				for k in range(len(info_frame)):
+					frame_numbers[1].append(info_frame[k].pop(0))
+				position.append(frame_numbers)
+			if "rotation" in l[i]:
+				frame_numbers = [l[i][0], []]
+				for k in range(len(info_frame)):
+					frame_numbers[1].append(info_frame[k].pop(0))
+				position.append(frame_numbers)
 
 		# if len(rotation) == 0:
 		# 	rotation = None
@@ -58,22 +65,22 @@ class Node:
 		return offset, position, rotation
 
 	@staticmethod
-	def CreateChild(parent, f):
+	def CreateChild(parent, f, info_frame):
 		l = Node.readline(f)
 		if l[0] == "JOINT":
 			Child = Node(l[1], parent)
-			offset, position, rotation = Node.readInfo(f)
+			offset, position, rotation = Node.readInfo(f, info_frame)
 			Child.translate = offset; Child.position = position; Child.rotate = rotation
 			parent.fils.append(Child)
-			Node.CreateChild(Child, f)
+			Node.CreateChild(Child, f, info_frame)
 		elif l[0] == "End":
 			Child = Node(l[1], parent)
-			offset = Node.readInfo(f, True)
+			offset = Node.readInfo(f, info_frame, True)
 			Child.translate = offset
 			parent.fils.append(Child)
-			Node.CreateChild(parent, f)
+			Node.CreateChild(parent, f, info_frame)
 		elif l[0] == "}":
-			Node.CreateChild(parent, f)
+			Node.CreateChild(parent, f, info_frame)
 		elif l[0] == "MOTION":
 			return
 		else:
@@ -97,6 +104,24 @@ class Node:
 	@staticmethod
 	def createStructureFromBVH(file_name):
 		Root = Node(None)
+
+		info_frame = []
+
+		with open(file_name) as motion_info:
+			f = motion_info.read().strip()
+			f = f.split("\n")
+			line = Node.readline(f)
+
+			while (Node.readline(f)[0] != "MOTION"):
+				continue
+
+			print("ROOT NODE CREATED")
+			number_of_frames = int(Node.readline(f)[1])
+			Root.frame_time = float(Node.readline(f)[2])
+
+			info_frame = [[float(j) for j in i.split(" ")] for i in f]
+
+
 		with open(file_name) as f: # Use file to refer to the file object
 			f = f.read().strip()
 			f = f.split("\n")
@@ -108,12 +133,14 @@ class Node:
 					return Root
 
 			Root.name = line[1]
-			offset, position, rotation = Node.readInfo(f)
+			offset, position, rotation = Node.readInfo(f, info_frame)
 			Root.translate = offset; Root.position = position; Root.rotate = rotation
 
-			Node.CreateChild(Root, f);
+			Node.CreateChild(Root, f, info_frame);
 
-			print("ROOT NODE CREATED")
+			# We need to assert that info_frame is fully empty
+			for i in info_frame:
+				assert len(i) == 0
 
 			return Root
 
@@ -122,13 +149,12 @@ class Node:
 		string += "JOINT " + self.name + "\n"
 		string += "{\n"
 		string += "OFFSET " + " ".join([str(i) for i in self.translate]) + "\n"
-		# print("LEN OF psoition + rotate", len(self.position) + len(self.rotate))
 		if len(self.position) + len(self.rotate) != 0:
 			string += "CHANNELS " + str(len(self.position) + len(self.rotate)) + " "
 			if len(self.position) != 0:
-				string += " ".join([(str(i) + "position") for i in self.position]) + " "
+				string += " ".join([(str(i[0]) + "position") for i in self.position]) + " "
 			if len(self.rotate) != 0:
-				string += " ".join([(str(i) + "rotation") for i in self.rotate]) + "\n"
+				string += " ".join([(str(i[0]) + "rotation") for i in self.rotate]) + "\n"
 
 		for i in self.fils:
 			child_str = i.__str__()
